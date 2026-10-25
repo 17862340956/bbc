@@ -1,0 +1,24 @@
+name: Build cpuinfo_spoof
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk:android13-5.15
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          make
+          ls -la *.ko
+      - name: Fix vermagic
+        run: |
+          python3 fix_vermagic.py cpuinfo_spoof.ko
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpuinfo_spoof
+          path: cpuinfo_spoof.ko

@@ -1,0 +1,51 @@
+name: Build cpuinfo_spoof r3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk:android13-5.15
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required repository files
+        run: |
+          set -eu
+          missing=0
+          for file in cpuinfo_spoof.c kirin9020.h Makefile fix_vermagic.py verify_module.py test_build_tools.py cpu_test.sh; do
+            if [ ! -s "$file" ]; then
+              echo "::error::Missing or empty repository-root file: $file"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo 'Upload ALL files from the extracted upload directory beside Makefile; retain .github/workflows/build.yml.'
+            echo 'Repository root contents:'
+            ls -la
+            exit 1
+          fi
+      - name: Test build tools
+        run: python3 test_build_tools.py -v
+      - name: Build with callback type assertions
+        run: |
+          set -eu
+          make
+          test -s cpuinfo_spoof.ko
+      - name: Fix vermagic
+        run: |
+          python3 fix_vermagic.py cpuinfo_spoof.ko
+      - name: Verify revision and callback ABI
+        run: |
+          python3 -m pip install --target /tmp/qilin-python pyelftools==0.33
+          PYTHONPATH=/tmp/qilin-python python3 verify_module.py cpuinfo_spoof.ko --output build_report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpuinfo_spoof-r3
+          if-no-files-found: error
+          path: |
+            cpuinfo_spoof.ko
+            build_report.json
+            cpu_test.sh

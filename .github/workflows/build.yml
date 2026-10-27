@@ -11,10 +11,20 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
+      - name: Check required repository files
+        run: |
+          set -eu
+          for file in cpuinfo_spoof.c kirin9020.h Makefile fix_vermagic.py verify_module.py test_build_tools.py cpu_test.sh; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing repository-root file: $file. Upload the extracted package contents into the repository root."
+              exit 1
+            fi
+          done
+      - name: Test build tools
+        run: python3 test_build_tools.py -v
       - name: Build with callback type assertions
         run: |
           set -eu
-          python3 -m unittest discover -s tests -v
           make
           test -s cpuinfo_spoof.ko
       - name: Fix vermagic

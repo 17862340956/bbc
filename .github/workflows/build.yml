@@ -1,4 +1,4 @@
-name: Build cpuinfo_spoof
+name: Build cpuinfo_spoof r3
 
 on:
   workflow_dispatch:
@@ -11,14 +11,24 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+      - name: Build with callback type assertions
         run: |
+          set -eu
+          python3 -m unittest discover -s tests -v
           make
-          ls -la *.ko
+          test -s cpuinfo_spoof.ko
       - name: Fix vermagic
         run: |
           python3 fix_vermagic.py cpuinfo_spoof.ko
+      - name: Verify revision and callback ABI
+        run: |
+          python3 -m pip install --target /tmp/qilin-python pyelftools==0.33
+          PYTHONPATH=/tmp/qilin-python python3 verify_module.py cpuinfo_spoof.ko --output build_report.json
       - uses: actions/upload-artifact@v4
         with:
-          name: cpuinfo_spoof
-          path: cpuinfo_spoof.ko
+          name: cpuinfo_spoof-r3
+          if-no-files-found: error
+          path: |
+            cpuinfo_spoof.ko
+            build_report.json
+            cpu_test.sh

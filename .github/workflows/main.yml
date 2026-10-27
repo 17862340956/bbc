@@ -37,15 +37,43 @@ jobs:
       - name: Fix vermagic
         run: |
           python3 fix_vermagic.py cpuinfo_spoof.ko
+      - name: Transfer unverified build to verification job
+        uses: actions/upload-artifact@v4
+        with:
+          name: intermediate-unverified-do-not-load
+          retention-days: 1
+          if-no-files-found: error
+          path: cpuinfo_spoof.ko
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    # No DDK container here: setup-python supplies Python and pip on the runner.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up verification Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download compiled module
+        uses: actions/download-artifact@v4
+        with:
+          name: intermediate-unverified-do-not-load
+          path: verified-artifact
+      - name: Install ELF analysis library on verification runner
+        run: python -m pip install pyelftools==0.33
       - name: Verify revision and callback ABI
         run: |
-          python3 -m pip install --target /tmp/qilin-python pyelftools==0.33
-          PYTHONPATH=/tmp/qilin-python python3 verify_module.py cpuinfo_spoof.ko --output build_report.json
-      - uses: actions/upload-artifact@v4
+          set -eu
+          python test_build_tools.py -v
+          python verify_module.py verified-artifact/cpuinfo_spoof.ko --output verified-artifact/build_report.json
+          cp cpu_test.sh verified-artifact/cpu_test.sh
+      - name: Upload verified deliverables only after checks pass
+        uses: actions/upload-artifact@v4
         with:
           name: cpuinfo_spoof-r3
           if-no-files-found: error
           path: |
-            cpuinfo_spoof.ko
-            build_report.json
-            cpu_test.sh
+            verified-artifact/cpuinfo_spoof.ko
+            verified-artifact/build_report.json
+            verified-artifact/cpu_test.sh
